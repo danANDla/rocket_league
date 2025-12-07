@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+
+#  time:
+#    build: ./time-orchestrator
+#    depends_on: [nats]
+#
+#  ct:
+#    build: ./ct-vm
+#    depends_on: [nats]
+#
+#  sr:
+#    build: ./sr-vm
+#    depends_on: [nats]
+#
+#  de:
+#    build: ./de-vm
+#    depends_on: [nats]
+#
+#  api:
+#    build: ./system-api
+#    ports:
+#      - "8080:8080"
+#    depends_on: [nats, ct, sr, de]

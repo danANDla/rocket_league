@@ -1,0 +1,15 @@
+(sim) init
+(sim) add_rocket id=1 tilt=10, weight=900, body=(20,10)
+(sim) add_engine owner_id=1 id=1 minimal_force=10 max_force=100
+(sim) start_engine rocket_id=1 engine_id=1
+(sim) step 10
+(sim) increase_force rocket_id=1 engine_id=1 10
+(sim) step 10
+(sim) release_rocket rocket_id=1
+(sim) step 1
+(sim) get_rocket_telemetry speed
+10 0.5
+(sim) get_rocket_telemetry acceleration
+1 0.005
+(sim) increase_force rocket_id=1 engine_id=1 5
+(sim) step 1

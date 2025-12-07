@@ -1,0 +1,89 @@
+// CT
+ct {
+    node x Integrator(init=0.0);
+    node v Integrator(init=0.0);
+    node a Sum();
+    node g Source(value=-9.81);        // сила тяжести
+    node thr Input();                  // вход от двигателя
+    node sat Nonlinear(func="saturate", min=-10, max=10);
+    connect a -> v;
+    connect v -> x;
+    connect g -> a;
+    connect thr -> a;
+    connect v -> sat;
+    connect sat -> output;
+}
+
+
+
+// DE
+de {
+    node sens Sensor(source="altitude");
+    node cmp Comparator(op="<");
+    node sw Switch();
+    node reg Register(init=0);
+    node add Adder();                      // сумматор
+    node act Actuator(target="motor1");
+
+    // Соединения между цифровыми блоками
+    connect sens -> cmp.in1;
+    connect const(10) -> cmp.in2;
+    connect cmp -> sw.ctrl;
+    connect const(5) -> sw.in1;
+    connect const(0) -> sw.in2;
+    connect sw -> add.in1;
+    connect reg -> add.in2;
+    connect add -> reg;
+    connect reg -> act;
+}
+
+// SR
+enum engine_status_t {
+    WORKING,
+    FAULT,
+    UNDEFINED,
+}
+{agregator
+    pub link $1 as i32 vx;
+    pub link $2 as i32 vy;
+    pub link $3 as i32 vz;
+    pub link $(4-6) as list[i32] coords;
+
+    link $(7-9)(14-15) as list[bit] power_bits;
+    pub f32 power;
+
+    integrate power(power_bits) {
+        self = 0f32;
+        int pow_int = 0;
+        for i, b in enumerate(values) {
+            pow_int |= b << (i + 2);
+        }
+        self = float(pow_int) / 10;
+    }
+
+    link $(10-13) as list[bit] status_bits;
+    pub engine_status_t status;
+
+    integrate status(status_bits) {
+        int status_int = int(status_bits);
+        self = if status_int == 0x3 {
+            engine_status_t::WORKING;
+        } elif status_int == 0b001 {
+            engine_status_t::FAULT;
+        } else {
+            engine_status_t::UNDEFINED;
+        }
+    }
+}
+
+{thread1
+    import agregator::(vx, vy, vz) as vx, vy, vz;
+
+    int speed = 0;
+
+    integrate speed(vx, vy, vz) {
+        float self = sqrt(pow(vx) + pow(vy) + pow(vz));
+    }
+
+    bind speed to $40;
+}
