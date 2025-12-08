@@ -37,7 +37,7 @@ import kotlin.concurrent.thread
 
 class DeInterpreter(
     private val jsonPath: String = "compiled.json",
-    private val natsUrl: String = "nats://nats:4222"
+    private val natsUrl: String = "nats://localhost:4222"
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private lateinit var model: ExtendedFullModel
@@ -138,6 +138,7 @@ class DeInterpreter(
         } else {
             // if no DE-event defined with this name, it may still be just a SR-notification; log it
             println(" → No DE-event definition for '$eventName' in model.de.events; ignoring or user-defined handling may be missing.")
+            onTick()
         }
     }
 
@@ -152,7 +153,9 @@ class DeInterpreter(
         println("[TICK] $tickTime")
 
         // 1) tick-only events (trigger == null) — run them
-        val tickOnly = model.de.events.filter { it.trigger == null }
+        val tickOnly = model.de.events.filter { 
+            it.trigger == null && it.name !in model.all_sr_events 
+        }
         if (tickOnly.isNotEmpty()) {
             println(" → Executing ${tickOnly.size} tick-only events")
         }
