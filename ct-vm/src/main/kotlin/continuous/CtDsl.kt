@@ -2,6 +2,7 @@ package continuous
 
 import continuous.lib.IntegratorNode
 import continuous.lib.ConstantNode
+import continuous.lib.ExternalInputNode
 
 class CtSystemBuilder {
     val system = CtSystem()
@@ -10,7 +11,7 @@ class CtSystemBuilder {
         name: String,
         block: IntegratorNode.() -> Unit
     ) {
-        val node = IntegratorNode(name)
+        val node = IntegratorNode(name, isExternal = false)
         node.block()
         system.addNode(node)
     }
@@ -19,8 +20,12 @@ class CtSystemBuilder {
         name: String,
         block: ConstantNode.() -> Unit
     ) {
-        val node = ConstantNode(name, value = 0.0)
+        val node = ConstantNode(name, value = 0.0, isExternal = false)
         node.block()
+        system.addNode(node)
+    }
+    fun externalInput(id: String, block: ExternalInputNode.() -> Unit) {
+        val node = ExternalInputNode(id).apply(block)
         system.addNode(node)
     }
 

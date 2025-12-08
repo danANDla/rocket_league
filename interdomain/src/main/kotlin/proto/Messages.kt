@@ -19,3 +19,18 @@ data class SrState(val outputs: Map<String, Int>)
 
 @Serializable
 data class DeEvent(val time: Double, val payload: String)
+
+@Serializable
+data class Vector(
+    val x: Double,
+    val y: Double,
+    val rotate: Double
+)
+
+@Serializable
+data class SimulationFootprint(
+   val coordinates: Vector,
+   val velocity: Vector,
+   val acceleration: Vector,
+   val time: Double
+)

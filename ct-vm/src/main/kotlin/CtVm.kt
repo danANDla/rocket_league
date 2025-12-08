@@ -1,11 +1,13 @@
 import continuous.CtSystem
 import continuous.ctSystem
+import continuous.lib.ExternalInputNode
 import proto.CtStateSnapshot
 import proto.TimeTick
 import io.nats.client.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import proto.CtExternalUpdate
+import proto.Vector
 
 const val T = 1.5
 
@@ -14,6 +16,7 @@ class CtVm {
     private val ctSystem = ctSystem {
         constant("desired") {
             value = 100.0
+            isExternal = false
         }
 
         integrator("engine") {
@@ -26,7 +29,17 @@ class CtVm {
             isExternal = true
         }
 
-        connect("desired", "out", "engine", "desired")
+        externalInput("coordinates.x") {
+            topic = "coordinates"
+            component = "x"
+        }
+
+        externalInput("coordinates.y") {
+            topic = "coordinates"
+            component = "y"
+        }
+
+        connect("coordinates.x", "out", "engine", "desired")
     }
 
     fun start() {
@@ -44,6 +57,15 @@ class CtVm {
 
             publishExternals(nc)
         })
+
+        ctSystem.nodes.values.filterIsInstance<ExternalInputNode>().forEach { extNode ->
+            println("Subscribing external input ${extNode.id} to ${extNode.topic}")
+            extNode.dispatcher = nc.createDispatcher { msg ->
+                val valueUpdate = Json.decodeFromString<Vector>(String(msg.data))
+                extNode.value = valueUpdate
+            }
+            extNode.dispatcher.subscribe(extNode.topic)
+        }
 
         d.subscribe("time.tick")
     }
