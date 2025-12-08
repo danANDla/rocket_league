@@ -1,0 +1,121 @@
+{
+    "all_sr_events": [
+        "FAR_FROM_TARGET",
+        "HIGH_ANGLE",
+        "COLLISION_WARNING"
+    ],
+    "continuous_inputs": [
+        "X",
+        "Angle",
+        "Z"
+    ],
+    "clock": "100ms",
+    "sr_rules": [
+        {
+            "condition": "X > 150",
+            "trigger": "FAR_FROM_TARGET"
+        },
+        {
+            "condition": "Angle > 30",
+            "trigger": "HIGH_ANGLE"
+        },
+        {
+            "condition": "Z < 0",
+            "trigger": "COLLISION_WARNING"
+        }
+    ],
+    "de": {
+        "variables": {
+            "distance": 120.0,
+            "fuel": 40.0
+        },
+        "events": [
+            {
+                "name": "FAR_FROM_TARGET",
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_main",
+                        "power": 0.6
+                    }
+                ]
+            },
+            {
+                "name": "HIGH_ANGLE",
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_orientation",
+                        "power": 1.0
+                    }
+                ]
+            },
+            {
+                "name": "COLLISION_WARNING",
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_main",
+                        "power": 0.0
+                    }
+                ]
+            },
+            {
+                "name": "approach",
+                "trigger": {
+                    "type": "var_condition",
+                    "variable": "distance",
+                    "op": "<",
+                    "value": 50.0
+                },
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_main",
+                        "power": 0.3
+                    }
+                ]
+            },
+            {
+                "name": "final_brake",
+                "trigger": {
+                    "type": "var_condition",
+                    "variable": "distance",
+                    "op": "<",
+                    "value": 10.0
+                },
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_main",
+                        "power": 0.0
+                    }
+                ]
+            },
+            {
+                "name": "drift",
+                "effects": [
+                    {
+                        "type": "update_variable",
+                        "variable": "distance",
+                        "delta": -2.0
+                    }
+                ]
+            },
+            {
+                "name": "fuel_burn",
+                "effects": [
+                    {
+                        "type": "update_variable",
+                        "variable": "fuel",
+                        "delta": -0.5
+                    }
+                ]
+            }
+        ],
+        "engines": [
+            "engine_main",
+            "engine_orientation"
+        ]
+    }
+}
