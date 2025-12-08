@@ -4,7 +4,8 @@ import continuous.CtNode
 
 class VelocityNode(
     override val id: String,
-    private val T: Double = 1.0
+    private val T: Double = 1.0,
+    override var isExternal: Boolean = false
 ) : CtNode {
 
     override val inputs = mutableMapOf<String, Double>()

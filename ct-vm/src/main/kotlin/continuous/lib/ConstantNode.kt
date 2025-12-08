@@ -4,6 +4,7 @@ import continuous.CtNode
 
 class ConstantNode (
     override val id: String,
+    override var isExternal: Boolean = false,
     var value: Double
 ): CtNode{
     override val inputs = mutableMapOf<String, Double>()

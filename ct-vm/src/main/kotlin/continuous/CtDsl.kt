@@ -19,7 +19,7 @@ class CtSystemBuilder {
         name: String,
         block: ConstantNode.() -> Unit
     ) {
-        val node = ConstantNode(name, 0.0)
+        val node = ConstantNode(name, value = 0.0)
         node.block()
         system.addNode(node)
     }

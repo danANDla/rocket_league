@@ -3,6 +3,7 @@ import continuous.CtNode
 
 class IntegratorNode(
     override val id: String,
+    override var isExternal: Boolean = true,
     var initialState: Double = 0.0,
     var derivativeFunc: (IntegratorNode) -> Double = { 0.0 }
 ) : CtNode {
