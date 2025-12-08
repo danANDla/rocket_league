@@ -2,6 +2,7 @@ package continuous
 
 import continuous.lib.IntegratorNode
 import continuous.lib.ConstantNode
+import continuous.lib.EngineCommandNode
 import continuous.lib.ExternalInputNode
 
 class CtSystemBuilder {
@@ -26,6 +27,11 @@ class CtSystemBuilder {
     }
     fun externalInput(id: String, block: ExternalInputNode.() -> Unit) {
         val node = ExternalInputNode(id, isExternal = false).apply(block)
+        system.addNode(node)
+    }
+
+    fun engineCommand(id: String, block: EngineCommandNode.() -> Unit) {
+        val node = EngineCommandNode(id, isExternal = false).apply(block)
         system.addNode(node)
     }
 

@@ -28,6 +28,13 @@ data class Vector(
 )
 
 @Serializable
+data class MsgCommand(
+    val cmd: String,
+    val engine: String,
+    val power: Double
+)
+
+@Serializable
 data class SimulationFootprint(
    val coordinates: Vector,
    val velocity: Vector,

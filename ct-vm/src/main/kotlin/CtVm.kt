@@ -1,5 +1,6 @@
 import continuous.CtSystem
 import continuous.ctSystem
+import continuous.lib.EngineCommandNode
 import continuous.lib.ExternalInputNode
 import proto.CtStateSnapshot
 import proto.TimeTick
@@ -7,6 +8,7 @@ import io.nats.client.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import proto.CtExternalUpdate
+import proto.MsgCommand
 import proto.Vector
 import java.io.File
 
@@ -15,7 +17,7 @@ const val T = 1.5
 class CtVm {
 
     private val compiler = ContinuousTimeCompiler()
-    private val ctSystem = compiler.compileFromJson(File("/home/danandla/botay/pes_kluch/rocket_league/ctVm.json").readText())
+    private val ctSystem = compiler.compileFromJson(File("/home/danandla/botay/pes_kluch/rocket_league/de-vm/resources/compiled.json").readText())
 //    private val ctSystem = ctSystem {
 //        constant("desired") {
 //            value = 100.0
@@ -53,16 +55,14 @@ class CtVm {
 //            component = "y"
 //        }
 //
-//        // connect("engine", "out", "engine", "desired")
+//        connect("engine", "out", "engine", "desired")
 //        connect("coordinates.x", "out", "sensorX", "realworld")
 //    }
 
     fun start() {
         val nc = Nats.connect("nats://localhost:4222")
         val d = nc.createDispatcher({ msg: Message ->
-            println(" msg.data received")
             val tick = Json.decodeFromString<TimeTick>(String(msg.data))
-            println("tick dt: ${tick.dt}; tick t: ${tick.t};")
 
             ctSystem.step(tick.dt)
 
@@ -81,6 +81,15 @@ class CtVm {
             extNode.dispatcher.subscribe(extNode.topic)
         }
 
+        ctSystem.nodes.values.filterIsInstance<EngineCommandNode>().forEach { commandNode ->
+            println("Subscribing external input ${commandNode.id} to ${commandNode.topic}")
+            commandNode.dispatcher = nc.createDispatcher { msg ->
+                val valueUpdate = Json.decodeFromString<MsgCommand>(String(msg.data))
+                commandNode.value = valueUpdate
+            }
+            commandNode.dispatcher.subscribe(commandNode.topic)
+        }
+
         d.subscribe("time.tick")
     }
 
@@ -97,7 +106,7 @@ class CtVm {
             if(n.isExternal) {
                 for((keyout, out) in n.outputs) {
                     val update = CtExternalUpdate(keynode, out)
-                    nc.publish("external.rocket", Json.encodeToString<CtExternalUpdate>(update).toByteArray())
+                    nc.publish("$keynode", Json.encodeToString<CtExternalUpdate>(update).toByteArray())
                 }
             }
         }

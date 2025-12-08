@@ -5,9 +5,9 @@
         "COLLISION_WARNING"
     ],
     "continuous_inputs": [
-        "X",
-        "Angle",
-        "Z"
+        "coordinates.x",
+        "coordinates.y",
+        "coordinates.rotate"
     ],
     "clock": "100ms",
     "sr_rules": [

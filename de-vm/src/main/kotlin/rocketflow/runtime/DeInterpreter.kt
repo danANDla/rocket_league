@@ -153,7 +153,7 @@ class DeInterpreter(
         println("[TICK] $tickTime")
 
         // 1) tick-only events (trigger == null) — run them
-        val tickOnly = model.de.events.filter { it.trigger == null }
+        val tickOnly = model.de.events.filter { it.trigger == null && it.name !in model.all_sr_events}
         if (tickOnly.isNotEmpty()) {
             println(" → Executing ${tickOnly.size} tick-only events")
         }
