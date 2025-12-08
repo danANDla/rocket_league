@@ -84,4 +84,51 @@ fun main() {
         "sr_rules=${full.sr_rules.size}, " +
         "de.events=${full.de.events.size})"
     )
+
+        // --- NEW: parse formula files ---
+    val formulaFiles = examplesDir.listFiles { _, name -> name.endsWith(".fm.dsl") }?.toList() ?: emptyList()
+    if (formulaFiles.isEmpty()) {
+        println("Warning: no formula files (.fm.dsl) found")
+    } else {
+        println("Parsing formula file: ${formulaFiles.first().path}")
+    }
+
+    val envParser = EnvParser()
+    val ff = formulaFiles.firstOrNull()?.let { envParser.parse(it) }
+        ?: error("Formula file missing")
+
+    // collect variables used in formulas
+    val variableRe = Regex("""[A-Za-z_]\w*""")
+
+    val varsUsed = linkedSetOf<String>()
+    for (formula in ff.formulas) {
+        for (token in variableRe.findAll(formula)) {
+            val v = token.value
+            // пропускаем числа
+            if (v.toDoubleOrNull() != null) continue
+            // пропускаем ключевые слова if будут (нет у нас пока)
+            varsUsed += v
+        }
+    }
+
+    // continuous_outputs = engines из compiled.json
+    val continuousOutputs = mergedEngines.toList()
+
+    // variables: только те, что используются в формулах, со значением 0
+    val variableMap = varsUsed.associateWith { 0.0 }
+
+    // --- Build env.json ---
+    val env = EnvModel(
+        distortion = ff.distortion,
+        continuous_inputs = continuousInputs,
+        continuous_outputs = continuousOutputs,
+        variable = variableMap,
+        formulas = ff.formulas
+    )
+
+    val envJson = Json { prettyPrint = true }
+    File("env.json").writeText(envJson.encodeToString(EnvModel.serializer(), env))
+
+    println("Wrote env.json (formulas=${ff.formulas.size}, variables=${variableMap.size})")
+
 }
