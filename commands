@@ -4,6 +4,7 @@ docker compose up
 # в интерактивном режиме запуск контейнера с готовым cli клиентом nats.io, подписка на топик time.tick и ct.state
 docker run -it --network rocket_league_default natsio/nats-box
 a5c7450a4398:~# nats --server nats://nats:4222 sub time.tick ct.state
+a5c7450a4398:~# nats --server nats://nats:4222  publish 100ms 'tact'
 
 # отдельный запуск jvm
 gradle :ct-vm:run
