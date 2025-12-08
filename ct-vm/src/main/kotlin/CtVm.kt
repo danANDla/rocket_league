@@ -8,55 +8,57 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import proto.CtExternalUpdate
 import proto.Vector
+import java.io.File
 
 const val T = 1.5
 
 class CtVm {
 
-    private val ctSystem = ctSystem {
-        constant("desired") {
-            value = 100.0
-            isExternal = false
-        }
-
-        integrator("engine") {
-            initialState = 0.0
-            derivativeFunc = { node ->
-                val D = node.inputs["desired"] ?: 0.0
-                val V = node.state["state"] ?: 0.0
-                (D - V) / 0.5
-            }
-            isExternal = true
-        }
-
-        integrator("sensorX") {
-            initialState = 0.0
-            derivativeFunc = { node ->
-                val D = node.inputs["realworld"] ?: 0.0
-                val V = node.state["state"] ?: 0.0
-                D - V
-            }
-            isExternal = false
-        }
-
-        externalInput("coordinates.x") {
-            topic = "coordinates"
-            component = "x"
-            isExternal = true
-        }
-
-        externalInput("coordinates.y") {
-            topic = "coordinates"
-            component = "y"
-        }
-
-        // connect("engine", "out", "engine", "desired")
-        connect("coordinates.x", "out", "sensorX", "realworld")
-    }
+    private val compiler = ContinuousTimeCompiler()
+    private val ctSystem = compiler.compileFromJson(File("/home/danandla/botay/pes_kluch/rocket_league/ctVm.json").readText())
+//    private val ctSystem = ctSystem {
+//        constant("desired") {
+//            value = 100.0
+//            isExternal = false
+//        }
+//
+//        integrator("engine") {
+//            initialState = 0.0
+//            derivativeFunc = { node ->
+//                val D = node.inputs["desired"] ?: 0.0
+//                val V = node.state["state"] ?: 0.0
+//                (D - V) / 0.5
+//            }
+//            isExternal = true
+//        }
+//
+//        integrator("sensorX") {
+//            initialState = 0.0
+//            derivativeFunc = { node ->
+//                val D = node.inputs["realworld"] ?: 0.0
+//                val V = node.state["state"] ?: 0.0
+//                D - V
+//            }
+//            isExternal = false
+//        }
+//
+//        externalInput("coordinates.x") {
+//            topic = "coordinates"
+//            component = "x"
+//            isExternal = true
+//        }
+//
+//        externalInput("coordinates.y") {
+//            topic = "coordinates"
+//            component = "y"
+//        }
+//
+//        // connect("engine", "out", "engine", "desired")
+//        connect("coordinates.x", "out", "sensorX", "realworld")
+//    }
 
     fun start() {
         val nc = Nats.connect("nats://localhost:4222")
-
         val d = nc.createDispatcher({ msg: Message ->
             println(" msg.data received")
             val tick = Json.decodeFromString<TimeTick>(String(msg.data))

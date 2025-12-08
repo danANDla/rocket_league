@@ -1,0 +1,15 @@
+{
+  "continuous_inputs": [
+        "coordinates.x",
+        "coordinates.rotate",
+        "coordinates.y",
+        "velocity.x"
+    ],
+  "clock": "100ms",
+  "sr_rules": [
+    { "condition": "X > 150", "event": "FAR_FROM_TARGET" },
+    { "condition": "Angle > 30", "event": "HIGH_ANGLE" },
+    { "condition": "Z < 0", "event": "COLLISION_WARNING" }
+  ]
+}
+
