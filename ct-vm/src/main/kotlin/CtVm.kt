@@ -29,9 +29,20 @@ class CtVm {
             isExternal = true
         }
 
+        integrator("sensorX") {
+            initialState = 0.0
+            derivativeFunc = { node ->
+                val D = node.inputs["realworld"] ?: 0.0
+                val V = node.state["state"] ?: 0.0
+                D - V
+            }
+            isExternal = false
+        }
+
         externalInput("coordinates.x") {
             topic = "coordinates"
             component = "x"
+            isExternal = true
         }
 
         externalInput("coordinates.y") {
@@ -39,7 +50,8 @@ class CtVm {
             component = "y"
         }
 
-        connect("coordinates.x", "out", "engine", "desired")
+        // connect("engine", "out", "engine", "desired")
+        connect("coordinates.x", "out", "sensorX", "realworld")
     }
 
     fun start() {

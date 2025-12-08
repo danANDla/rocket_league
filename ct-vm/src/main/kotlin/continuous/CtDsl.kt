@@ -25,7 +25,7 @@ class CtSystemBuilder {
         system.addNode(node)
     }
     fun externalInput(id: String, block: ExternalInputNode.() -> Unit) {
-        val node = ExternalInputNode(id).apply(block)
+        val node = ExternalInputNode(id, isExternal = false).apply(block)
         system.addNode(node)
     }
 

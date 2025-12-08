@@ -4,10 +4,10 @@ import io.nats.client.Dispatcher
 import proto.Vector
 
 class ExternalInputNode(
-    override val id: String
+    override val id: String,
+    override var isExternal: Boolean
 ) : CtNode {
 
-    override var isExternal: Boolean = false
     var value = Vector(x = 0.0, y = 0.0, rotate = 0.0)   // сюда NATS пишет внешние данные
     var topic: String = ""
     var component: String = ""
