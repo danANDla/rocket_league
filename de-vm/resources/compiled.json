@@ -3,6 +3,7 @@
         "FAR_FROM_TARGET",
         "CLOSE_TO_TARGET",
         "HIGH_ANGLE",
+        "LOW_ANGLE",
         "COLLISION_WARNING"
     ],
     "continuous_inputs": [
@@ -13,20 +14,20 @@
     "clock": "100ms",
     "sr_rules": [
         {
-            "condition": "coordinates.x > 150",
+            "condition": "coordinates.x < 2000",
             "trigger": "FAR_FROM_TARGET"
         },
         {
-          "condition": "coordinates.x < 150",
+          "condition": "coordinates.x > 2000",
           "trigger": "CLOSE_TO_TARGET"
         },
         {
-            "condition": "coordinates.rotate > 30",
-            "trigger": "HIGH_ANGLE"
+          "condition": "coordinates.x > 2800",
+          "trigger": "HIGH_ANGLE"
         },
         {
-            "condition": "coordinates.y < 0",
-            "trigger": "COLLISION_WARNING"
+          "condition": "coordinates.x < 2800",
+          "trigger": "LOW_ANGLE"
         }
     ],
     "de": {
@@ -41,7 +42,7 @@
                     {
                         "type": "set_engine_power",
                         "engine": "engine_main",
-                        "power": 0.6
+                        "power": 1700
                     }
                 ]
             },
@@ -70,10 +71,20 @@
                 "effects": [
                     {
                         "type": "set_engine_power",
-                        "engine": "engine_orientation",
-                        "power": 1.0
+                        "engine": "engine_orientation1",
+                        "power": 50.0
                     }
                 ]
+            },
+            {
+              "name": "LOW_ANGLE",
+              "effects": [
+                {
+                  "type": "set_engine_power",
+                  "engine": "engine_orientation1",
+                  "power": 0
+                }
+              ]
             },
             {
                 "name": "COLLISION_WARNING",

@@ -12,6 +12,7 @@ import proto.EnginesSnapshot
 import proto.MsgCommand
 import proto.Vector
 import java.io.File
+import kotlin.math.abs
 
 const val T = 1.5
 
@@ -37,7 +38,7 @@ class CtVm {
             println("Subscribing external input ${extNode.id} to ${extNode.topic}")
             extNode.dispatcher = nc.createDispatcher { msg ->
                 val valueUpdate = Json.decodeFromString<Vector>(String(msg.data))
-                extNode.value = valueUpdate
+                extNode.value = Vector(abs(valueUpdate.x), valueUpdate.y, valueUpdate.rotate)
             }
             extNode.dispatcher.subscribe(extNode.topic)
         }
