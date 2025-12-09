@@ -4,36 +4,64 @@ import io.nats.client.Connection
 import io.nats.client.Dispatcher
 import io.nats.client.Nats
 import kotlinx.serialization.json.Json
-import rocketflow.model.ExtendedFullModel
-import rocketflow.model.DEEvent
-import rocketflow.model.Effect
-import rocketflow.model.Trigger
+import rocketflow.model.*
 import java.io.File
 import java.time.Instant
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.math.*
 
-/**
- * DeInterpreter
- *
- * Responsibilities:
- *  - load compiled.json (ExtendedFullModel)
- *  - initialize state from model.de.variables
- *  - subscribe to SR events via NATS (subject = event name)
- *  - subscribe to clock subject via NATS if model.clock defined;
- *      otherwise spawn local scheduler to generate ticks
- *  - on each tick:
- *      * execute tick-only events (events with trigger == null)
- *      * evaluate var_condition triggers and fire corresponding events (if condition met)
- *  - on receiving SR event via NATS: execute effects for that event
- *  - effects supported:
- *      - set_engine_power -> publish to "engine.<engineName>" subject with payload (JSON/plain)
- *      - update_variable -> change state variable by delta
- *
- * Logging: verbose println for every important step.
- */
+// --- New: simple expression evaluator for DE formulas ---
+object EvalExpr {
+    fun eval(expr: String, vars: Map<String, Double>): Double {
+        val e = expr.replace("\\s+".toRegex(), "")
+        return evalRecursive(e, vars)
+    }
+
+    private fun evalRecursive(expr: String, vars: Map<String, Double>): Double {
+        var s = expr
+        // functions
+        if (s.startsWith("sin(") && s.endsWith(")")) {
+            val inner = s.substring(4, s.length - 1)
+            return sin(evalRecursive(inner, vars))
+        }
+        if (s.startsWith("cos(") && s.endsWith(")")) {
+            val inner = s.substring(4, s.length - 1)
+            return cos(evalRecursive(inner, vars))
+        }
+        if (s.startsWith("abs(") && s.endsWith(")")) {
+            val inner = s.substring(4, s.length - 1)
+            return abs(evalRecursive(inner, vars))
+        }
+        // parentheses
+        if (s.startsWith("(") && s.endsWith(")")) {
+            return evalRecursive(s.substring(1, s.length - 1), vars)
+        }
+        // binary operators
+        for (op in listOf('+', '-')) {
+            val idx = s.lastIndexOf(op)
+            if (idx > 0) {
+                val left = s.substring(0, idx)
+                val right = s.substring(idx + 1)
+                return if (op == '+') evalRecursive(left, vars) + evalRecursive(right, vars)
+                else evalRecursive(left, vars) - evalRecursive(right, vars)
+            }
+        }
+        for (op in listOf('*', '/')) {
+            val idx = s.lastIndexOf(op)
+            if (idx > 0) {
+                val left = s.substring(0, idx)
+                val right = s.substring(idx + 1)
+                return if (op == '*') evalRecursive(left, vars) * evalRecursive(right, vars)
+                else evalRecursive(left, vars) / evalRecursive(right, vars)
+            }
+        }
+        // number or variable
+        return s.toDoubleOrNull() ?: vars[s] ?: 0.0
+    }
+}
 
 class DeInterpreter(
     private val jsonPath: String = "compiled.json",
@@ -41,192 +69,126 @@ class DeInterpreter(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private lateinit var model: ExtendedFullModel
-
-    // state of DE variables
     private val state = mutableMapOf<String, Double>()
-
-    // NATS connection + dispatcher
     private lateinit var nc: Connection
     private lateinit var dispatcher: Dispatcher
-
-    // scheduler for local ticks if no clock subject provided
     private var scheduler: ScheduledExecutorService? = null
-
-    // whether interpreter is running
-    @Volatile
-    private var running = false
-
-    // mutex for state updates (simple)
+    @Volatile private var running = false
     private val stateLock = Any()
 
     fun load() {
         val text = File(jsonPath).readText()
         model = json.decodeFromString(ExtendedFullModel.serializer(), text)
-
-        // initialize state
         state.clear()
         state.putAll(model.de.variables)
-
         println("DE Interpreter: loaded ${model.de.events.size} events, ${model.de.engines.size} engines.")
         println("Initial DE variables: $state")
     }
 
     fun run() {
-        if (!::model.isInitialized) {
-            error("Model not loaded. Call load() before start().")
-        }
-
+        if (!::model.isInitialized) error("Model not loaded. Call load() first.")
         println("Connecting to NATS at $natsUrl ...")
         nc = Nats.connect(natsUrl)
-
-        dispatcher = nc.createDispatcher { msg ->
-            // handler for incoming subjects; we handle subscriptions below explicitly
-            val subj = msg.subject
-            // We treat the subject as the event name
-            handleIncomingSrEvent(subj)
-        }
-
-        // subscribe to SR events
+        dispatcher = nc.createDispatcher { msg -> handleIncomingSrEvent(msg.subject) }
         for (ev in model.all_sr_events) {
             dispatcher.subscribe(ev)
             println("Subscribed to SR event subject: '$ev'")
         }
-
-        // subscribe to clock subject if present, otherwise create a local scheduler
         val clockSubject = model.clock?.takeIf { it.isNotBlank() }
         if (clockSubject != null) {
             dispatcher.subscribe(clockSubject)
-            println("Subscribed to clock subject: '$clockSubject' (will perform ticks on incoming messages)")
+            println("Subscribed to clock subject: '$clockSubject'")
         } else {
-            // no external clock — create a local scheduler that will call onTick at fixed rate
-            // default tick period 100ms
-            val periodMs = 100L
             scheduler = Executors.newSingleThreadScheduledExecutor()
             scheduler!!.scheduleAtFixedRate({
-                try {
-                    onTick()
-                } catch (ex: Exception) {
-                    println("Error during onTick: ${ex.message}")
-                    ex.printStackTrace()
-                }
-            }, 0, periodMs, TimeUnit.MILLISECONDS)
-            println("No clock subject specified; started local tick scheduler with period ${periodMs}ms")
+                try { onTick() } catch (ex: Exception) { ex.printStackTrace() }
+            }, 0, 100L, TimeUnit.MILLISECONDS)
         }
-
-        // also subscribe to specific internal event subjects if any DE events should be externally receivable
-        // (we already subscribed SR events and clock; DE internal triggers are handled onTick)
-
-        // set running flag
         running = true
-
-        println("DE Interpreter is RUNNING. Waiting for messages and ticks...")
-        // spin thread to keep process alive (NATS dispatcher runs callbacks on its own threads)
-        thread(start = true, isDaemon = false) {
-            while (running) {
-                Thread.sleep(1000)
-            }
-        }
+        thread(start = true, isDaemon = false) { while (running) Thread.sleep(1000) }
     }
 
     private fun handleIncomingSrEvent(eventName: String) {
-        println("[EVENT:SR] Received event from SR: '$eventName' at ${Instant.now()}")
-        // find event definition in model.de.events by name
+        println("[EVENT:SR] Received event '$eventName' at ${Instant.now()}")
         val evt = model.de.events.find { it.name == eventName }
-        if (evt != null) {
-            // execute effects of this event
-            executeEventEffects(evt, source = "SR")
-        } else {
-            // if no DE-event defined with this name, it may still be just a SR-notification; log it
-            println(" → No DE-event definition for '$eventName' in model.de.events; ignoring or user-defined handling may be missing.")
-            onTick()
-        }
+        if (evt != null) {executeEventEffects(evt, "SR")}
+        else{onTick()}
     }
 
-    /**
-     * Called on every tick.
-     * Order:
-     *   1) execute tick-only events (events with trigger == null)
-     *   2) evaluate var_condition triggers (trigger.type == var_condition) and execute those whose condition is met
-     */
     private fun onTick() {
-        val tickTime = Instant.now()
-        println("[TICK] $tickTime")
-
-        // 1) tick-only events (trigger == null) — run them
-        val tickOnly = model.de.events.filter { 
-            it.trigger == null && it.name !in model.all_sr_events 
-        }
-        if (tickOnly.isNotEmpty()) {
-            println(" → Executing ${tickOnly.size} tick-only events")
-        }
-        for (evt in tickOnly) {
-            executeEventEffects(evt, source = "TICK")
-        }
-
-        // 2) evaluate var_condition triggers
+        println("[TICK] ${Instant.now()}")
+        val tickOnly = model.de.events.filter { it.trigger == null && it.name !in model.all_sr_events }
+        tickOnly.forEach { executeEventEffects(it, "TICK") }
         val condEvents = model.de.events.filter { it.trigger is Trigger.VarCondition }
         for (evt in condEvents) {
             val trig = evt.trigger as Trigger.VarCondition
-            val conditionSatisfied = evaluateVarCondition(trig.variable, trig.op, trig.value)
-            if (conditionSatisfied) {
-                println("[EVENT:COND] Triggered '${evt.name}' because ${trig.variable} ${trig.op} ${trig.value} is true")
-                executeEventEffects(evt, source = "COND")
+            val cur = synchronized(stateLock) { state[trig.variable] ?: 0.0 }
+            val satisfied = when (trig.op) {
+                "<" -> cur < trig.value
+                "<=" -> cur <= trig.value
+                ">" -> cur > trig.value
+                ">=" -> cur >= trig.value
+                "==" -> cur == trig.value
+                "!=" -> cur != trig.value
+                else -> false
+            }
+            if (satisfied) executeEventEffects(evt, "COND")
+        }
+    }
+
+    private fun evalExpr(expr: rocketflow.model.Expr, state: Map<String, Double>): Double {
+        return when (expr) {
+            is rocketflow.model.Expr.Const -> expr.value
+            is rocketflow.model.Expr.Variable -> state[expr.name] ?: 0.0
+            is rocketflow.model.Expr.UnaryOp -> {
+                val arg = evalExpr(expr.arg, state)
+                when (expr.op) {
+                    "+" -> +arg
+                    "-" -> -arg
+                    "sin" -> kotlin.math.sin(arg)
+                    "cos" -> kotlin.math.cos(arg)
+                    "abs" -> kotlin.math.abs(arg)
+                    else -> error("Unknown unary op '${expr.op}'")
+                }
+            }
+            is rocketflow.model.Expr.BinaryOp -> {
+                val left = evalExpr(expr.left, state)
+                val right = evalExpr(expr.right, state)
+                when (expr.op) {
+                    "+" -> left + right
+                    "-" -> left - right
+                    "*" -> left * right
+                    "/" -> left / (right + 0.01)
+                    else -> error("Unknown binary op '${expr.op}'")
+                }
             }
         }
     }
 
-    /**
-     * Evaluate a simple variable condition: op in { "<", ">", "<=", ">=", "==", "!=" }
-     */
-    private fun evaluateVarCondition(variable: String, op: String, value: Double): Boolean {
-        val current = synchronized(stateLock) { state[variable] }
-        if (current == null) {
-            println(" → Variable '$variable' not present in state; treating condition as false")
-            return false
-        }
-        return when (op) {
-            "<"  -> current < value
-            ">"  -> current > value
-            "<=" -> current <= value
-            ">=" -> current >= value
-            "==" -> current == value
-            "!=" -> current != value
-            else -> {
-                println(" → Unknown operator '$op' in trigger; treating as false")
-                false
-            }
-        }
-    }
 
-    /**
-     * Apply the effects listed on an event.
-     * Supported effect types:
-     *  - set_engine_power: publishes to engine.<engineName> subject with JSON/plain payload
-     *  - update_variable: modifies state[variable] += delta
-     *
-     * source indicates why the event fired: "SR", "TICK", "COND", etc.
-     */
     private fun executeEventEffects(evt: DEEvent, source: String) {
         println(" → Executing event '${evt.name}' (source=$source), effects=${evt.effects.size}")
         for ((idx, eff) in evt.effects.withIndex()) {
             when (eff) {
                 is Effect.SetEnginePower -> {
-                    val engine = eff.engine
-                    val power = eff.power
-                    // publish engine command to NATS subject "engine.<engineName>"
-                    val subj = "engine.$engine"
-                    val payload = """{"cmd":"set_power","engine":"$engine","power":$power}"""
+                    val subj = "engine.${eff.engine}"
+                    val payload = """{"cmd":"set_power","engine":"${eff.engine}","power":${eff.power}}"""
                     nc.publish(subj, payload.toByteArray())
-                    println("    [Effect ${idx+1}] set_engine_power -> $engine = $power (published to '$subj')")
+                    println("    [Effect ${idx+1}] set_engine_power -> ${eff.engine} = ${eff.power}")
                 }
 
                 is Effect.UpdateVariable -> {
-                    val varName = eff.variable
-                    val delta = eff.delta
-                    val old = synchronized(stateLock) { state.getOrDefault(varName, 0.0) }
-                    val new = old + delta
-                    synchronized(stateLock) { state[varName] = new }
-                    println("    [Effect ${idx+1}] update_variable -> $varName: $old -> $new (delta=$delta)")
+                    val deltaValue = evalExpr(eff.delta, state)
+                    val old = synchronized(stateLock) { state.getOrDefault(eff.variable, 0.0) }
+                    synchronized(stateLock) { state[eff.variable] = deltaValue }
+                    println("    [Effect ${idx+1}] update_variable -> ${eff.variable}: $old -> ${deltaValue}")
+                }
+
+                is Effect.AddExternal -> {
+                    val deltaValue = eff.delta?.let { evalExpr(it, state) } ?: 0.0
+                    val old = synchronized(stateLock) { state.getOrDefault(eff.target, 0.0) }
+                    synchronized(stateLock) { state[eff.target] = old + deltaValue }
+                    println("    [Effect ${idx+1}] add_external -> ${eff.target}: $old -> ${old + deltaValue}")
                 }
 
                 else -> {
@@ -235,20 +197,15 @@ class DeInterpreter(
             }
         }
     }
+    fun setInput(name: String, value: Double) { synchronized(stateLock) { state[name] = value } }
+    fun getVariable(name: String) = synchronized(stateLock) { state[name] ?: 0.0 }
 
-    /**
-     * Stop interpreter: shutdown scheduler and NATS connection.
-     */
     fun stop() {
         println("Stopping DE Interpreter...")
         running = false
         scheduler?.shutdownNow()
-        try {
-            dispatcher.unsubscribe("*")
-        } catch (_: Exception) {}
-        try {
-            nc.close()
-        } catch (_: Exception) {}
+        try { dispatcher.unsubscribe("*") } catch (_: Exception) {}
+        try { nc.close() } catch (_: Exception) {}
         println("DE Interpreter stopped.")
     }
 }
