@@ -1,39 +1,28 @@
-# Дискретно-событийная модель CPU
+clock 100
+var xproection = 0.0
+var yproection = 0.0
+var xrelative = 0.0
+var yrelative = 0.0
+var rotate_correction = 0.0
 
-clock 100ms
+on XDEV_ERROR -> add angle rotate_correction 
+on YDEV_ERROR -> add angle rotate_correction
 
-# Переменные DE-уровня
-var distance = 120.0
-var fuel = 40.0
+event x_proection:
+ action update xproection sin(rotate)
 
-# ==== Реакция на SR-события ====
+event y_proection:
+ action update yproection cos(rotate)
 
-# Событие из SR: ракета далеко по X -> чуть увеличиваем тягу
-on FAR_FROM_TARGET -> set engine_main power 0.6
+event x_relative:
+ action update xrelative xdev / xproection
 
-# Событие из SR: слишком большой угол
-on HIGH_ANGLE -> set engine_orientation power 1.0
+event y_relative:
+ action update yrelative ydev / yproection
 
-# Событие из SR: Z < 0, опасность столкновения -> аварийное торможение
-on COLLISION_WARNING -> set engine_main power 0.0
+event r_correction:
+ action update rotate_correction yrelative - xrelative
 
-
-# ==== Внутренние DE события, реагирующие на переменные ====
-
-# При приближении к цели снижаем тягу
-event approach:
-  trigger distance < 50
-  set engine_main power 0.3
-
-# Когда очень близко — выключаем двигатель
-event final_brake:
-  trigger distance < 10
-  set engine_main power 0.0
-
-# Плавное уменьшение distance, симуляция движения
-event drift:
-  action update distance -2
-
-# Расход топлива — каждые 100 мс уменьшается
-event fuel_burn:
-  action update fuel -0.5
+event power_changer:
+ trigger abs(rotate_correction) < 0.1
+ add power 1

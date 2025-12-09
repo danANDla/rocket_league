@@ -1,121 +1,175 @@
 {
     "all_sr_events": [
-        "FAR_FROM_TARGET",
-        "HIGH_ANGLE",
-        "COLLISION_WARNING"
+        "XDEV_ERROR",
+        "YDEV_ERROR"
     ],
     "continuous_inputs": [
-        "X",
-        "Angle",
-        "Z"
+        "xdev",
+        "ydev"
     ],
-    "clock": "100ms",
+    "clock": "100",
     "sr_rules": [
         {
-            "condition": "X > 150",
-            "trigger": "FAR_FROM_TARGET"
+            "condition": "xdev > 3",
+            "trigger": "XDEV_ERROR"
         },
         {
-            "condition": "Angle > 30",
-            "trigger": "HIGH_ANGLE"
-        },
-        {
-            "condition": "Z < 0",
-            "trigger": "COLLISION_WARNING"
+            "condition": "ydev > 3",
+            "trigger": "YDEV_ERROR"
         }
     ],
     "de": {
         "variables": {
-            "distance": 120.0,
-            "fuel": 40.0
+            "xproection": 0.0,
+            "yproection": 0.0,
+            "xrelative": 0.0,
+            "yrelative": 0.0,
+            "rotate_correction": 0.0
         },
         "events": [
             {
-                "name": "FAR_FROM_TARGET",
+                "name": "XDEV_ERROR",
                 "effects": [
                     {
-                        "type": "set_engine_power",
-                        "engine": "engine_main",
-                        "power": 0.6
+                        "type": "add_external",
+                        "target": "angle",
+                        "delta": {
+                            "type": "variable",
+                            "name": "rotate_correction"
+                        }
                     }
                 ]
             },
             {
-                "name": "HIGH_ANGLE",
+                "name": "YDEV_ERROR",
                 "effects": [
                     {
-                        "type": "set_engine_power",
-                        "engine": "engine_orientation",
-                        "power": 1.0
+                        "type": "add_external",
+                        "target": "angle",
+                        "delta": {
+                            "type": "variable",
+                            "name": "rotate_correction"
+                        }
                     }
                 ]
             },
             {
-                "name": "COLLISION_WARNING",
-                "effects": [
-                    {
-                        "type": "set_engine_power",
-                        "engine": "engine_main",
-                        "power": 0.0
-                    }
-                ]
-            },
-            {
-                "name": "approach",
-                "trigger": {
-                    "type": "var_condition",
-                    "variable": "distance",
-                    "op": "<",
-                    "value": 50.0
-                },
-                "effects": [
-                    {
-                        "type": "set_engine_power",
-                        "engine": "engine_main",
-                        "power": 0.3
-                    }
-                ]
-            },
-            {
-                "name": "final_brake",
-                "trigger": {
-                    "type": "var_condition",
-                    "variable": "distance",
-                    "op": "<",
-                    "value": 10.0
-                },
-                "effects": [
-                    {
-                        "type": "set_engine_power",
-                        "engine": "engine_main",
-                        "power": 0.0
-                    }
-                ]
-            },
-            {
-                "name": "drift",
+                "name": "x_proection",
                 "effects": [
                     {
                         "type": "update_variable",
-                        "variable": "distance",
-                        "delta": -2.0
+                        "variable": "xproection",
+                        "delta": {
+                            "type": "unary_op",
+                            "op": "sin",
+                            "arg": {
+                                "type": "variable",
+                                "name": "rotate"
+                            }
+                        }
                     }
                 ]
             },
             {
-                "name": "fuel_burn",
+                "name": "y_proection",
                 "effects": [
                     {
                         "type": "update_variable",
-                        "variable": "fuel",
-                        "delta": -0.5
+                        "variable": "yproection",
+                        "delta": {
+                            "type": "unary_op",
+                            "op": "cos",
+                            "arg": {
+                                "type": "variable",
+                                "name": "rotate"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "x_relative",
+                "effects": [
+                    {
+                        "type": "update_variable",
+                        "variable": "xrelative",
+                        "delta": {
+                            "type": "binary_op",
+                            "left": {
+                                "type": "variable",
+                                "name": "xdev"
+                            },
+                            "op": "/",
+                            "right": {
+                                "type": "variable",
+                                "name": "xproection"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "y_relative",
+                "effects": [
+                    {
+                        "type": "update_variable",
+                        "variable": "yrelative",
+                        "delta": {
+                            "type": "binary_op",
+                            "left": {
+                                "type": "variable",
+                                "name": "ydev"
+                            },
+                            "op": "/",
+                            "right": {
+                                "type": "variable",
+                                "name": "yproection"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "r_correction",
+                "effects": [
+                    {
+                        "type": "update_variable",
+                        "variable": "rotate_correction",
+                        "delta": {
+                            "type": "binary_op",
+                            "left": {
+                                "type": "variable",
+                                "name": "yrelative"
+                            },
+                            "op": "-",
+                            "right": {
+                                "type": "variable",
+                                "name": "xrelative"
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "power_changer",
+                "trigger": {
+                    "type": "expr_trigger",
+                    "expr": {
+                        "type": "variable",
+                        "name": "abs(rotate_correction) < 0.1"
+                    }
+                },
+                "effects": [
+                    {
+                        "type": "add_external",
+                        "target": "power",
+                        "delta": {
+                            "type": "const",
+                            "value": 1.0
+                        }
                     }
                 ]
             }
-        ],
-        "engines": [
-            "engine_main",
-            "engine_orientation"
         ]
     }
 }

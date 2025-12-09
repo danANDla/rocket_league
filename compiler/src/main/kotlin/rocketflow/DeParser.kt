@@ -2,28 +2,8 @@ package rocketflow
 
 import java.io.File
 
-/**
- * Упрощённый парсер DE DSL.
- *
- * Поддерживаем синтаксис:
- *
- * clock 10ms
- *
- * var <name> = <number>
- *
- * event <name>:
- *   trigger <var> <op> <value>
- *   set <engine> power <value>
- *   action update <var> <delta>
- *
- * Также поддерживается короткий синтаксис:
- * on <EVENT> -> <actionName>
- *   где <actionName> можно трактовать как set <engine> power <val> если нужно.
- *
- * Мы считаем, что input корректен.
- */
-
 class DeParser {
+
     fun parseFile(f: File): Pair<DEModel, String?> {
         val variables = linkedMapOf<String, Double>()
         val events = mutableListOf<DEEvent>()
@@ -33,109 +13,83 @@ class DeParser {
         val lines = f.readLines()
         var i = 0
         while (i < lines.size) {
-            var line = lines[i].trim()
+            val line = lines[i].trim()
             i++
             if (line.isEmpty() || line.startsWith("#")) continue
 
-            if (line.startsWith("clock ")) {
-                clock = line.removePrefix("clock").trim()
-                continue
-            }
-            if (line.startsWith("var ")) {
-                // var name = 100.0
-                val rest = line.removePrefix("var").trim()
-                val parts = rest.split("=").map { it.trim() }
-                if (parts.size == 2) {
-                    val name = parts[0]
-                    val v = parts[1].toDoubleOrNull() ?: 0.0
-                    variables[name] = v
+            when {
+                line.startsWith("clock") -> clock = line.removePrefix("clock").trim()
+                line.startsWith("var ") -> {
+                    val parts = line.removePrefix("var").split("=").map { it.trim() }
+                    if (parts.size == 2) {
+                        variables[parts[0]] = parts[1].toDoubleOrNull() ?: 0.0
+                    }
                 }
-                continue
-            }
-            if (line.startsWith("event ")) {
-                // event name:  (or without colon)
-                val name = line.removePrefix("event").trim().trimEnd(':').trim()
-                val effects = mutableListOf<Effect>()
-                var trigger: Trigger? = null
-                // read following indented lines (or until next event/clock/var)
-                while (i < lines.size) {
-                    val nxt = lines[i].trim()
-                    if (nxt.isEmpty() || nxt.startsWith("#")) { i++; continue }
-                    if (nxt.startsWith("event ") || nxt.startsWith("var ") || nxt.startsWith("clock ") || nxt.startsWith("on ")) break
-                    if (nxt.startsWith("trigger ")) {
-                        val body = nxt.removePrefix("trigger").trim()
-                        // expecting: <var> <op> <value>
-                        val tokens = body.split(Regex("\\s+"))
-                        if (tokens.size >= 3) {
-                            val varName = tokens[0]
-                            val op = tokens[1]
-                            val value = tokens[2].toDoubleOrNull() ?: 0.0
-                            trigger = Trigger.VarCondition(variable = varName, op = op, value = value)
-                        }
-                    } else if (nxt.startsWith("set ")) {
-                        // set engine1 power 0.5
-                        val body = nxt.removePrefix("set").trim()
-                        val parts = body.split(Regex("\\s+"))
-                        if (parts.size >= 3 && parts[1] == "power") {
-                            val engine = parts[0]
-                            val power = parts[2].toDoubleOrNull() ?: 0.0
-                            engines.add(engine)
-                            effects.add(Effect.SetEnginePower(engine = engine, power = power))
-                        }
-                    } else if (nxt.startsWith("action update ")) {
-                        val body = nxt.removePrefix("action update").trim()
-                        val toks = body.split(Regex("\\s+"))
-                        if (toks.size >= 2) {
-                            val varName = toks[0]
-                            val delta = toks[1].toDoubleOrNull() ?: 0.0
-                            effects.add(Effect.UpdateVariable(variable = varName, delta = delta))
-                        }
-                    } else if (nxt.startsWith("action ")) {
-                        // action <something> — try simple patterns: update var -1
-                        val body = nxt.removePrefix("action").trim()
-                        if (body.startsWith("update ")) {
-                            val b = body.removePrefix("update").trim()
-                            val toks = b.split(Regex("\\s+"))
-                            if (toks.size >= 2) {
-                                val varName = toks[0]
-                                val delta = toks[1].toDoubleOrNull() ?: 0.0
-                                effects.add(Effect.UpdateVariable(variable = varName, delta = delta))
+                line.startsWith("event ") -> {
+                    val name = line.removePrefix("event").trim().trimEnd(':')
+                    val effects = mutableListOf<Effect>()
+                    var trigger: Trigger? = null
+
+                    while (i < lines.size) {
+                        val nxt = lines[i].trim()
+                        if (nxt.isEmpty() || nxt.startsWith("#")) { i++; continue }
+                        if (nxt.startsWith("event") || nxt.startsWith("var") || nxt.startsWith("clock") || nxt.startsWith("on")) break
+
+                        when {
+                            nxt.startsWith("trigger ") -> {
+                                val exprStr = nxt.removePrefix("trigger").trim()
+                                trigger = Trigger.ExprTrigger(ExprParser.parse(exprStr))
+                            }
+                            nxt.startsWith("action update ") -> {
+                                val rest = nxt.removePrefix("action update").trim()
+                                val spaceIndex = rest.indexOf(' ')
+                                if (spaceIndex > 0) {
+                                    val varName = rest.substring(0, spaceIndex)
+                                    val exprStr = rest.substring(spaceIndex + 1)
+                                    effects.add(Effect.UpdateVariable(varName, ExprParser.parse(exprStr)))
+                                }
+                            }
+                            nxt.startsWith("add ") -> {
+                                val rest = nxt.removePrefix("add").trim()
+                                val spaceIndex = rest.indexOf(' ')
+                                if (spaceIndex > 0) {
+                                    val target = rest.substring(0, spaceIndex)
+                                    val exprStr = rest.substring(spaceIndex + 1)
+                                    effects.add(Effect.AddExternal(target, ExprParser.parse(exprStr)))
+                                } else {
+                                    effects.add(Effect.AddExternal(rest, null))
+                                }
                             }
                         }
+                        i++
                     }
-                    i++
+
+                    events.add(DEEvent(name, trigger, effects))
                 }
-                events.add(DEEvent(name = name, trigger = trigger, effects = effects))
-                continue
-            }
-            if (line.startsWith("on ")) {
-                // on EVENT -> action  (simple shorthand)
-                val rest = line.removePrefix("on").trim()
-                val parts = rest.split("->").map { it.trim() }
-                if (parts.size == 2) {
-                    val evName = parts[0]
-                    val action = parts[1] // e.g., thrust_down or set engine1 power 0.5
-                    // try parse "set <engine> power <value>"
-                    if (action.startsWith("set ")) {
-                        val b = action.removePrefix("set").trim()
-                        val toks = b.split(Regex("\\s+"))
-                        if (toks.size >= 3 && toks[1] == "power") {
-                            val engine = toks[0]
-                            val power = toks[2].toDoubleOrNull() ?: 0.0
-                            engines.add(engine)
-                            events.add(DEEvent(name = evName, trigger = null, effects = listOf(Effect.SetEnginePower(engine, power))))
+                line.startsWith("on ") -> {
+                    val rest = line.removePrefix("on").trim()
+                    val parts = rest.split("->").map { it.trim() }
+                    if (parts.size == 2) {
+                        val evName = parts[0]
+                        val action = parts[1]
+                        if (action.startsWith("add ")) {
+                            val restAction = action.removePrefix("add").trim()
+                            val spaceIndex = restAction.indexOf(' ')
+                            if (spaceIndex > 0) {
+                                val target = restAction.substring(0, spaceIndex)
+                                val exprStr = restAction.substring(spaceIndex + 1)
+                                events.add(DEEvent(evName, null, listOf(Effect.AddExternal(target, ExprParser.parse(exprStr)))))
+                            } else {
+                                events.add(DEEvent(evName, null, listOf(Effect.AddExternal(restAction, null))))
+                            }
                         } else {
-                            // otherwise create a placeholder effect-less event
-                            events.add(DEEvent(name = evName, trigger = null, effects = emptyList()))
+                            events.add(DEEvent(evName, null, emptyList()))
                         }
-                    } else {
-                        // placeholder event with no effects
-                        events.add(DEEvent(name = evName, trigger = null, effects = emptyList()))
                     }
                 }
             }
-        } // while
-        val model = DEModel(variables = variables.toMap(), events = events, engines = engines.toList())
-        return Pair(model, clock)
+        }
+
+        return DEModel(variables.toMap(), events, engines.toList()) to clock
     }
 }

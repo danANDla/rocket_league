@@ -3,13 +3,6 @@ package rocketflow
 import kotlinx.serialization.json.Json
 import java.io.File
 
-/**
- * RocketFlow compiler — extended version
- * Добавляет:
- * - сбор всех SR событий в поле all_sr_events
- * - минимальная валидация, предполагается корректный ввод
- */
-
 fun main() {
     println("RocketFlow compiler — building extended JSON model")
 
@@ -18,16 +11,19 @@ fun main() {
         error("examples/ folder not found")
     }
 
+    // ------------------- Сбор файлов -------------------
     val srFiles = examplesDir.listFiles { _, name -> name.endsWith(".sr.dsl") }?.toList() ?: emptyList()
     val deFiles = examplesDir.listFiles { _, name -> name.endsWith(".de.dsl") }?.toList() ?: emptyList()
+    val formulaFiles = examplesDir.listFiles { _, name -> name.endsWith(".fm.dsl") }?.toList() ?: emptyList()
 
     if (srFiles.isEmpty()) println("Warning: no SR files found")
     if (deFiles.isEmpty()) println("Warning: no DE files found")
+    if (formulaFiles.isEmpty()) println("Warning: no formula files found")
 
     val srParser = SrParser()
     val deParser = DeParser()
 
-    // --- Parse SR files ---
+    // ------------------- Парсинг SR -------------------
     val allSrRules = mutableListOf<SrRule>()
     for (f in srFiles) {
         println("Parsing SR file: ${f.path}")
@@ -36,10 +32,10 @@ fun main() {
 
     val continuousInputs = srParser.findContinuousInputs(allSrRules)
 
-    // --- NEW: collect all SR-triggered events ---
+    // ------------------- Сбор всех SR-триггеров -------------------
     val allSrEvents = allSrRules.map { it.trigger }.distinct()
 
-    // --- Merge DE models ---
+    // ------------------- Парсинг DE -------------------
     val mergedVars = linkedMapOf<String, Double>()
     val mergedEvents = mutableListOf<DEEvent>()
     val mergedEngines = linkedSetOf<String>()
@@ -59,76 +55,36 @@ fun main() {
         mergedEngines += deModel.engines
     }
 
-    // --- prepare extended output ---
-    val full = ExtendedFullModel(
+    // ------------------- Сбор полного DE-моделя -------------------
+    val fullDE = DEModel(
+        variables = mergedVars.toMap(),
+        events = mergedEvents,
+        engines = mergedEngines.toList()
+    )
+
+    // ------------------- Генерация compiled.json -------------------
+    val fullModel = ExtendedFullModel(
         all_sr_events = allSrEvents,
         continuous_inputs = continuousInputs,
         clock = clock,
         sr_rules = allSrRules,
-        de = DEModel(
-            variables = mergedVars.toMap(),
-            events = mergedEvents,
-            engines = mergedEngines.toList()
-        )
+        de = fullDE
     )
 
     val json = Json { prettyPrint = true }
-    val out = json.encodeToString(ExtendedFullModel.serializer(), full)
+    File("compiled.json").writeText(json.encodeToString(ExtendedFullModel.serializer(), fullModel))
+    println("Wrote compiled.json")
 
-    File("compiled.json").writeText(out)
-
-    println(
-        "Wrote compiled.json " +
-        "(events_from_SR=${full.all_sr_events.size}, " +
-        "continuous_inputs=${full.continuous_inputs.size}, " +
-        "sr_rules=${full.sr_rules.size}, " +
-        "de.events=${full.de.events.size})"
-    )
-
-        // --- NEW: parse formula files ---
-    val formulaFiles = examplesDir.listFiles { _, name -> name.endsWith(".fm.dsl") }?.toList() ?: emptyList()
-    if (formulaFiles.isEmpty()) {
-        println("Warning: no formula files (.fm.dsl) found")
-    } else {
-        println("Parsing formula file: ${formulaFiles.first().path}")
+    // ------------------- Генерация env.json -------------------
+    formulaFiles.forEach { f ->
+        println("Parsing formula file for env.json: ${f.path}")
+        val env = generateEnvJson(
+            formulaFile = f,
+            continuousInputs = continuousInputs,
+            deEvents = fullModel.de.events
+        )
+        val json = Json { prettyPrint = true }
+        File("env.json").writeText(json.encodeToString(EnvJson.serializer(), env))
+        println("env.json successfully generated")
     }
-
-    val envParser = EnvParser()
-    val ff = formulaFiles.firstOrNull()?.let { envParser.parse(it) }
-        ?: error("Formula file missing")
-
-    // collect variables used in formulas
-    val variableRe = Regex("""[A-Za-z_]\w*""")
-
-    val varsUsed = linkedSetOf<String>()
-    for (formula in ff.formulas) {
-        for (token in variableRe.findAll(formula)) {
-            val v = token.value
-            // пропускаем числа
-            if (v.toDoubleOrNull() != null) continue
-            // пропускаем ключевые слова if будут (нет у нас пока)
-            varsUsed += v
-        }
-    }
-
-    // continuous_outputs = engines из compiled.json
-    val continuousOutputs = mergedEngines.toList()
-
-    // variables: только те, что используются в формулах, со значением 0
-    val variableMap = varsUsed.associateWith { 0.0 }
-
-    // --- Build env.json ---
-    val env = EnvModel(
-        distortion = ff.distortion,
-        continuous_inputs = continuousInputs,
-        continuous_outputs = continuousOutputs,
-        variable = variableMap,
-        formulas = ff.formulas
-    )
-
-    val envJson = Json { prettyPrint = true }
-    File("env.json").writeText(envJson.encodeToString(EnvModel.serializer(), env))
-
-    println("Wrote env.json (formulas=${ff.formulas.size}, variables=${variableMap.size})")
-
 }
