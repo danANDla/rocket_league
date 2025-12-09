@@ -8,6 +8,7 @@ import io.nats.client.*
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import proto.CtExternalUpdate
+import proto.EnginesSnapshot
 import proto.MsgCommand
 import proto.Vector
 import java.io.File
@@ -18,46 +19,6 @@ class CtVm {
 
     private val compiler = ContinuousTimeCompiler()
     private val ctSystem = compiler.compileFromJson(File("/home/danandla/botay/pes_kluch/rocket_league/de-vm/resources/compiled.json").readText())
-//    private val ctSystem = ctSystem {
-//        constant("desired") {
-//            value = 100.0
-//            isExternal = false
-//        }
-//
-//        integrator("engine") {
-//            initialState = 0.0
-//            derivativeFunc = { node ->
-//                val D = node.inputs["desired"] ?: 0.0
-//                val V = node.state["state"] ?: 0.0
-//                (D - V) / 0.5
-//            }
-//            isExternal = true
-//        }
-//
-//        integrator("sensorX") {
-//            initialState = 0.0
-//            derivativeFunc = { node ->
-//                val D = node.inputs["realworld"] ?: 0.0
-//                val V = node.state["state"] ?: 0.0
-//                D - V
-//            }
-//            isExternal = false
-//        }
-//
-//        externalInput("coordinates.x") {
-//            topic = "coordinates"
-//            component = "x"
-//            isExternal = true
-//        }
-//
-//        externalInput("coordinates.y") {
-//            topic = "coordinates"
-//            component = "y"
-//        }
-//
-//        connect("engine", "out", "engine", "desired")
-//        connect("coordinates.x", "out", "sensorX", "realworld")
-//    }
 
     fun start() {
         val nc = Nats.connect("nats://localhost:4222")
@@ -102,14 +63,15 @@ class CtVm {
     }
 
     private fun publishExternals(nc: Connection) {
+        val externalState = mutableMapOf<String, Double>()
         for ((keynode, n) in ctSystem.nodes) {
             if(n.isExternal) {
                 for((keyout, out) in n.outputs) {
-                    val update = CtExternalUpdate(keynode, out)
-                    nc.publish("$keynode", Json.encodeToString<CtExternalUpdate>(update).toByteArray())
+                    externalState[keynode] = out
                 }
             }
         }
+        nc.publish("engines", Json.encodeToString<MutableMap<String, Double>>(externalState).toByteArray())
     }
 }
 

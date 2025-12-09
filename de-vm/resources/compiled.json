@@ -1,6 +1,7 @@
 {
     "all_sr_events": [
         "FAR_FROM_TARGET",
+        "CLOSE_TO_TARGET",
         "HIGH_ANGLE",
         "COLLISION_WARNING"
     ],
@@ -12,15 +13,15 @@
     "clock": "100ms",
     "sr_rules": [
         {
-            "condition": "X > 150",
+            "condition": "coordinates.x > 150",
             "trigger": "FAR_FROM_TARGET"
         },
         {
-            "condition": "Angle > 30",
+            "condition": "coordinates.rotate > 30",
             "trigger": "HIGH_ANGLE"
         },
         {
-            "condition": "Z < 0",
+            "condition": "coordinates.y < 0",
             "trigger": "COLLISION_WARNING"
         }
     ],
@@ -39,6 +40,16 @@
                         "power": 0.6
                     }
                 ]
+            },
+            {
+              "name": "CLOSE_TO_TARGET",
+              "effects": [
+                {
+                  "type": "set_engine_power",
+                  "engine": "engine_main",
+                  "power": 0
+                }
+              ]
             },
             {
                 "name": "HIGH_ANGLE",
@@ -115,7 +126,8 @@
         ],
         "engines": [
             "engine_main",
-            "engine_orientation"
+            "engine_orientation1",
+            "engine_orientation2"
         ]
     }
 }

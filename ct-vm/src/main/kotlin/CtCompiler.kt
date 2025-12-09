@@ -24,17 +24,16 @@ class ContinuousTimeCompiler {
                     val inputId = name.split(".")
                     topic = inputId[0]
                     component = inputId[1].lowercase()
-                    isExternal = true
                 }
             }
 
             config.de.engines.forEach { name ->
-                engineCommand(name) {
+                engineCommand("command$name") {
                     topic = "engine.$name"
                     component = "power"
                 }
 
-                integrator("integrator$name") {
+                integrator(name) {
                     initialState = 0.0
                     derivativeFunc = { node ->
                         val D = node.inputs["desired"] ?: 0.0
@@ -44,7 +43,7 @@ class ContinuousTimeCompiler {
                     isExternal = true
                 }
 
-                connect(name, "out", "integrator$name", "desired")
+                connect("command$name", "out", name, "desired")
             }
 
         }
