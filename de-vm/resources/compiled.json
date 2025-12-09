@@ -17,6 +17,10 @@
             "trigger": "FAR_FROM_TARGET"
         },
         {
+          "condition": "coordinates.x < 150",
+          "trigger": "CLOSE_TO_TARGET"
+        },
+        {
             "condition": "coordinates.rotate > 30",
             "trigger": "HIGH_ANGLE"
         },
@@ -40,6 +44,16 @@
                         "power": 0.6
                     }
                 ]
+            },
+            {
+              "name": "CLOSE_TO_TARGET",
+              "effects": [
+                {
+                  "type": "set_engine_power",
+                  "engine": "engine_main",
+                  "power": 0
+                }
+              ]
             },
             {
               "name": "CLOSE_TO_TARGET",
