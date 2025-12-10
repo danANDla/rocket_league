@@ -2,6 +2,7 @@ import io.nats.client.*
 import proto.TimeTick
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
+import proto.CtStateSnapshot
 
 fun main() {
     val nc = Nats.connect("nats://localhost:4222")
@@ -11,19 +12,32 @@ fun main() {
     val CPUclockFactor = 100
     var ticksBeforeClock = 0
 
+    var incrementer = 0
+
     println("[TIME] Orchestrator started")
 
-    while (true) {
-        t += dt
-        val msg = Json.encodeToString(TimeTick(t, dt))
-        nc.publish("time.tick", msg.toByteArray())
-        ticksBeforeClock += 1
-        if(ticksBeforeClock == CPUclockFactor) {
-            ticksBeforeClock = 0
-            nc.publish("100ms", msg.toByteArray())
+    val d = nc.createDispatcher({ msg: Message ->
+        val tick = Json.decodeFromString<TimeTick>(String(msg.data))
+        incrementer += 1
+        if(incrementer == CPUclockFactor) {
+            incrementer = 0
+            nc.publish("100ms", "clock".toByteArray())
         }
+    })
 
-        Thread.sleep((dt * 1000).toLong())
+    d.subscribe("time.tick")
 
-    }
+//    while (true) {
+//        t += dt
+//        val msg = Json.encodeToString(TimeTick(t, dt))
+//        nc.publish("time.tick", msg.toByteArray())
+//        ticksBeforeClock += 1
+//        if(ticksBeforeClock == CPUclockFactor) {
+//            ticksBeforeClock = 0
+//            nc.publish("100ms", msg.toByteArray())
+//        }
+//
+//        Thread.sleep((dt * 1000).toLong())
+//
+//    }
 }

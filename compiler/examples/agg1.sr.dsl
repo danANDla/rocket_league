@@ -2,10 +2,11 @@
 # Эти события будут использоваться в дискретно-событийном узле
 
 # Если дистанция по оси X становится слишком большой — надо ускоряться
-rule X > 150 -> FAR_FROM_TARGET
+rule coordinates_x < 1850 -> FAR_FROM_TARGET
+
+rule coordinates_x > 1850 -> CLOSE_TO_TARGET
 
 # Если ракета слишком сильно наклонена — корректировать ориентацию
-rule Angle > 30 -> HIGH_ANGLE
+rule coordinates_x > 2800 -> HIGH_ANGLE
 
-# Если Z < 0 — столкновение с поверхностью
-rule Z < 0 -> COLLISION_WARNING
+rule coordinates_x < 2800 -> LOW_ANGLE

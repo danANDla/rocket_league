@@ -21,7 +21,7 @@ class ContinuousTimeCompiler {
         return ctSystem {
             config.continuous_inputs.forEach { name ->
                 externalInput(name) {
-                    val inputId = name.split(".")
+                    val inputId = name.split("_")
                     topic = inputId[0]
                     component = inputId[1].lowercase()
                 }

@@ -13,5 +13,5 @@ data class ExtendedFullModel(
 data class DESection(
     val variables: Map<String, Double>,
     val engines: List<String>,
-    val events: List<DEEvent>
+    val events: List<DEEvent>,
 )

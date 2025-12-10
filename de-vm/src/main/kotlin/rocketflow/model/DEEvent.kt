@@ -6,5 +6,8 @@ import kotlinx.serialization.Serializable
 data class DEEvent(
     val name: String,
     val trigger: Trigger? = null,
-    val effects: List<Effect>
+    val effects: List<Effect>,
+    var cntTicksOnExecution: Int = 0,
+    var ticksDelay: Int = 0,
+    var isExecuting: Boolean = false
 )

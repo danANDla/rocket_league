@@ -75,7 +75,7 @@ fun main() {
     val json = Json { prettyPrint = true }
     val out = json.encodeToString(ExtendedFullModel.serializer(), full)
 
-    File("compiled.json").writeText(out)
+    File("/home/danandla/botay/pes_kluch/rocket_league/de-vm/resources/compiled.json").writeText(out)
 
     println(
         "Wrote compiled.json " +

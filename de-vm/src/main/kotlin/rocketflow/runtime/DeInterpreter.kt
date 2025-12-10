@@ -129,15 +129,25 @@ class DeInterpreter(
     }
 
     private fun handleIncomingSrEvent(eventName: String) {
-        println("[EVENT:SR] Received event from SR: '$eventName' at ${Instant.now()}")
+        // println("[EVENT:SR] Received event from SR: '$eventName' at ${Instant.now()}")
         // find event definition in model.de.events by name
         val evt = model.de.events.find { it.name == eventName }
         if (evt != null) {
             // execute effects of this event
-            executeEventEffects(evt, source = "SR")
+            if(evt.isExecuting) {
+                evt.cntTicksOnExecution += 1
+                if (evt.cntTicksOnExecution > evt.ticksDelay) {
+                    evt.cntTicksOnExecution = 0
+                    evt.isExecuting = false
+                }
+            } else {
+                evt.isExecuting = true
+                evt.ticksDelay = 200
+                executeEventEffects(evt, source = "SR")
+            }
         } else {
             // if no DE-event defined with this name, it may still be just a SR-notification; log it
-            println(" → No DE-event definition for '$eventName' in model.de.events; ignoring or user-defined handling may be missing.")
+            // println(" → No DE-event definition for '$eventName' in model.de.events; ignoring or user-defined handling may be missing.")
             onTick()
         }
     }

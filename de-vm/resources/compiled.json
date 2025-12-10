@@ -3,31 +3,28 @@
         "FAR_FROM_TARGET",
         "CLOSE_TO_TARGET",
         "HIGH_ANGLE",
-        "LOW_ANGLE",
-        "COLLISION_WARNING"
+        "LOW_ANGLE"
     ],
     "continuous_inputs": [
-        "coordinates.x",
-        "coordinates.y",
-        "coordinates.rotate"
+        "coordinates_x"
     ],
     "clock": "100ms",
     "sr_rules": [
         {
-            "condition": "coordinates.x < 2000",
+            "condition": "coordinates_x < 1850",
             "trigger": "FAR_FROM_TARGET"
         },
         {
-          "condition": "coordinates.x > 2000",
-          "trigger": "CLOSE_TO_TARGET"
+            "condition": "coordinates_x > 1850",
+            "trigger": "CLOSE_TO_TARGET"
         },
         {
-          "condition": "coordinates.x > 2800",
-          "trigger": "HIGH_ANGLE"
+            "condition": "coordinates_x > 2800",
+            "trigger": "HIGH_ANGLE"
         },
         {
-          "condition": "coordinates.x < 2800",
-          "trigger": "LOW_ANGLE"
+            "condition": "coordinates_x < 2800",
+            "trigger": "LOW_ANGLE"
         }
     ],
     "de": {
@@ -42,29 +39,19 @@
                     {
                         "type": "set_engine_power",
                         "engine": "engine_main",
-                        "power": 1700
+                        "power": 1750.0
                     }
                 ]
             },
             {
-              "name": "CLOSE_TO_TARGET",
-              "effects": [
-                {
-                  "type": "set_engine_power",
-                  "engine": "engine_main",
-                  "power": 0
-                }
-              ]
-            },
-            {
-              "name": "CLOSE_TO_TARGET",
-              "effects": [
-                {
-                  "type": "set_engine_power",
-                  "engine": "engine_main",
-                  "power": 0
-                }
-              ]
+                "name": "CLOSE_TO_TARGET",
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_main",
+                        "power": 0.0
+                    }
+                ]
             },
             {
                 "name": "HIGH_ANGLE",
@@ -77,21 +64,21 @@
                 ]
             },
             {
-              "name": "LOW_ANGLE",
-              "effects": [
-                {
-                  "type": "set_engine_power",
-                  "engine": "engine_orientation1",
-                  "power": 0
-                }
-              ]
+                "name": "LOW_ANGLE",
+                "effects": [
+                    {
+                        "type": "set_engine_power",
+                        "engine": "engine_orientation1",
+                        "power": 0.0
+                    }
+                ]
             },
             {
                 "name": "COLLISION_WARNING",
                 "effects": [
                     {
                         "type": "set_engine_power",
-                        "engine": "engine_main",
+                        "engine": "engine_orientation1",
                         "power": 0.0
                     }
                 ]
@@ -129,16 +116,6 @@
                 ]
             },
             {
-                "name": "drift",
-                "effects": [
-                    {
-                        "type": "update_variable",
-                        "variable": "distance",
-                        "delta": -2.0
-                    }
-                ]
-            },
-            {
                 "name": "fuel_burn",
                 "effects": [
                     {
@@ -151,8 +128,7 @@
         ],
         "engines": [
             "engine_main",
-            "engine_orientation1",
-            "engine_orientation2"
+            "engine_orientation1"
         ]
     }
 }
